@@ -1,87 +1,78 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Carbon\Carbon;
+use App\Models\Mood;
+use App\Models\Habit;
+use App\Models\HabitLog;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Carbon\Carbon;
 
 class StatisticsController extends Controller
 {
-    public function moodChart(Request $request)
+    public function index()
     {
-        $days = $request->input('days', 30);
-        
-        $moods = $request->user()
-            ->moods()
-            ->where('date', '>=', Carbon::now()->subDays($days))
-            ->orderBy('date')
-            ->get(['date', 'mood_level']);
+        $userId = auth()->id();
+        $now = now();
 
-        return response()->json($moods);
-    }
+        // Mood chart data (last 30 days)
+        $moodData = Mood::where('user_id', $userId)
+            ->where('date', '>=', $now->copy()->subDays(30))
+            ->orderBy('date', 'asc')
+            ->get()
+            ->map(fn($mood) => [
+                'date' => $mood->date->format('Y-m-d'),
+                'mood_level' => $mood->mood_level,
+            ]);
 
-    public function habitStats(Request $request)
-    {
-        $habits = $request->user()->habits()->where('is_active', true)->get();
-        
-        $stats = $habits->map(function ($habit) use ($request) {
-            $thisMonth = Carbon::now()->startOfMonth();
-            
-            $totalLogs = $habit->logs()
-                ->where('date', '>=', $thisMonth)
-                ->count();
-                
-            $completedLogs = $habit->logs()
-                ->where('date', '>=', $thisMonth)
-                ->where('completed', true)
-                ->count();
-            
-            $successRate = $totalLogs > 0 ? round(($completedLogs / $totalLogs) * 100) : 0;
-            
-            return [
-                'habit' => $habit,
-                'completed_count' => $completedLogs,
-                'total_days' => $totalLogs,
-                'success_rate' => $successRate
-            ];
-        });
+        // Habit statistics
+        $habits = Habit::where('user_id', $userId)
+            ->where('is_active', true)
+            ->withCount([
+                'logs as completed_count' => function ($query) use ($now) {
+                    $query->where('completed', true)
+                        ->where('date', '>=', $now->copy()->subDays(30));
+                }
+            ])
+            ->get()
+            ->map(fn($habit) => [
+                'name' => $habit->name,
+                'category' => $habit->category,
+                'completion_rate' => round(($habit->completed_count / 30) * 100, 1),
+                'completed_days' => $habit->completed_count,
+            ]);
 
-        return response()->json($stats);
-    }
-
-    public function monthlySummary(Request $request)
-    {
-        $thisMonth = Carbon::now()->startOfMonth();
-        
-        // Humeur moyenne
-        $avgMood = $request->user()
-            ->moods()
-            ->where('date', '>=', $thisMonth)
-            ->avg('mood_level');
-        
-        // Total entrées journal
-        $journalCount = $request->user()
-            ->journalEntries()
-            ->where('created_at', '>=', $thisMonth)
+        // Monthly summary
+        $startOfMonth = $now->copy()->startOfMonth();
+        $totalMoods = Mood::where('user_id', $userId)
+            ->where('date', '>=', $startOfMonth)
             ->count();
-        
-        // Habitude la plus suivie
-        $topHabit = DB::table('habit_logs')
-            ->join('habits', 'habit_logs.habit_id', '=', 'habits.id')
-            ->where('habit_logs.user_id', $request->user()->id)
-            ->where('habit_logs.date', '>=', $thisMonth)
-            ->where('habit_logs.completed', true)
-            ->select('habits.name', DB::raw('count(*) as count'))
-            ->groupBy('habits.id', 'habits.name')
-            ->orderBy('count', 'desc')
-            ->first();
 
-        return response()->json([
-            'average_mood' => round($avgMood, 1),
-            'journal_entries' => $journalCount,
-            'top_habit' => $topHabit ? $topHabit->name : null,
-            'top_habit_count' => $topHabit ? $topHabit->count : 0
+        $averageMood = Mood::where('user_id', $userId)
+            ->where('date', '>=', $startOfMonth)
+            ->avg('mood_level');
+
+        $totalJournalEntries = DB::table('journal_entries')
+            ->where('user_id', $userId)
+            ->whereMonth('created_at', $now->month)
+            ->whereYear('created_at', $now->year)
+            ->count();
+
+        $totalHabitsCompleted = HabitLog::where('user_id', $userId)
+            ->where('completed', true)
+            ->where('date', '>=', $startOfMonth)
+            ->count();
+
+        return Inertia::render('statistics/index', [
+            'moodChart' => $moodData,
+            'habitStats' => $habits,
+            'summary' => [
+                'total_moods' => $totalMoods,
+                'average_mood' => round($averageMood ?? 0, 1),
+                'total_journal_entries' => $totalJournalEntries,
+                'total_habits_completed' => $totalHabitsCompleted,
+            ],
         ]);
     }
 }

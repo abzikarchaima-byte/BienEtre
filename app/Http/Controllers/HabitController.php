@@ -1,57 +1,68 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Habit;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class HabitController extends Controller
 {
-    public function index(Request $request)
+    public function index()
     {
-        $habits = $request->user()
-            ->habits()
-            ->where('is_active', true)
+        $habits = Habit::where('user_id', auth()->id())
+            ->orderBy('created_at', 'desc')
             ->get();
 
-        return response()->json($habits);
+        return Inertia::render('habits/index', [
+            'habits' => $habits,
+        ]);
     }
 
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'category' => 'required|in:sommeil,sport,alimentation,mental,autre'
+            'category' => 'required|string|max:255',
         ]);
 
-        $habit = $request->user()->habits()->create($request->all());
+        Habit::create([
+            'user_id' => auth()->id(),
+            'name' => $validated['name'],
+            'category' => $validated['category'],
+            'is_active' => true,
+        ]);
 
-        return response()->json($habit, 201);
+        return redirect()->back()->with('success', 'Habitude créée avec succès');
     }
 
     public function update(Request $request, Habit $habit)
     {
-        
+        // Ensure user owns this habit
+        if ($habit->user_id !== auth()->id()) {
+            abort(403);
+        }
 
-        $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'category' => 'sometimes|required|in:sommeil,sport,alimentation,mental,autre',
-            'is_active' => 'sometimes|boolean'
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'category' => 'sometimes|string|max:255',
+            'is_active' => 'sometimes|boolean',
         ]);
 
-        $habit->update($request->all());
+        $habit->update($validated);
 
-        return response()->json($habit);
+        return redirect()->back()->with('success', 'Habitude mise à jour');
     }
 
     public function destroy(Habit $habit)
     {
-       
-        
+        // Ensure user owns this habit
+        if ($habit->user_id !== auth()->id()) {
+            abort(403);
+        }
+
         $habit->delete();
 
-        return response()->json([
-            'message' => 'Habitude supprimée'
-        ]);
+        return redirect()->back()->with('success', 'Habitude supprimée');
     }
 }

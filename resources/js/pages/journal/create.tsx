@@ -1,32 +1,21 @@
-// resources/js/pages/journal/create.tsx
-import { Head } from '@inertiajs/react';
-import { useState } from 'react';
-import axios from 'axios';
-
-const api = axios.create({
-    baseURL: 'http://localhost:8000/api',
-    headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-    },
-    withCredentials: true,
-});
+import { Head, router } from '@inertiajs/react';
+import { useState, FormEvent } from 'react';
+import AuthenticatedLayout from '@/layouts/authenticated-layout';
 
 const moodEmojis = {
-    1: '😢',
-    2: '😟',
-    3: '😐',
-    4: '😊',
-    5: '😄',
+    0: '😢',
+    1: '😟',
+    2: '😐',
+    3: '😊',
+    4: '😄',
 };
 
 const moodLabels = {
-    1: 'Très mal',
-    2: 'Pas bien',
-    3: 'Moyen',
-    4: 'Bien',
-    5: 'Très bien',
+    0: 'Très mal',
+    1: 'Pas bien',
+    2: 'Moyen',
+    3: 'Bien',
+    4: 'Très bien',
 };
 
 export default function JournalCreate() {
@@ -44,38 +33,27 @@ export default function JournalCreate() {
         setCharCount(value.length);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
-        
+
         if (!formData.content.trim()) {
             alert('Veuillez écrire du contenu');
             return;
         }
 
         setLoading(true);
-        try {
-            await api.post('/journal', {
-                title: formData.title || undefined,
-                content: formData.content,
-                mood_level: formData.mood_level || undefined,
-            });
-            
-            // Redirection vers la liste
-            window.location.href = '/journal';
-        } catch (error) {
-            console.error('Erreur:', error);
-            alert('Erreur lors de l\'enregistrement');
-            setLoading(false);
-        }
+        router.post('/journal', formData, {
+            onFinish: () => setLoading(false),
+        });
     };
 
     return (
-        <>
+        <AuthenticatedLayout>
             <Head title="Nouvelle Entrée - Journal" />
 
             <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    
+
                     {/* Header */}
                     <div className="mb-8">
                         <h1 className="text-4xl font-bold text-gray-800 mb-2">
@@ -88,10 +66,10 @@ export default function JournalCreate() {
 
                     {/* Formulaire */}
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        
+
                         {/* Card principale */}
                         <div className="bg-white rounded-2xl shadow-lg p-8">
-                            
+
                             {/* Titre */}
                             <div className="mb-6">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -113,16 +91,15 @@ export default function JournalCreate() {
                                     Comment vous sentez-vous ? (optionnel)
                                 </label>
                                 <div className="flex justify-around">
-                                    {[1, 2, 3, 4, 5].map((mood) => (
+                                    {[0, 1, 2, 3, 4].map((mood) => (
                                         <button
                                             key={mood}
                                             type="button"
                                             onClick={() => setFormData({ ...formData, mood_level: mood })}
-                                            className={`flex flex-col items-center p-3 rounded-xl transition-all transform hover:scale-110 ${
-                                                formData.mood_level === mood
+                                            className={`flex flex-col items-center p-3 rounded-xl transition-all transform hover:scale-110 ${formData.mood_level === mood
                                                     ? 'bg-purple-100 ring-4 ring-purple-400 scale-110'
                                                     : 'hover:bg-gray-100'
-                                            }`}
+                                                }`}
                                         >
                                             <span className="text-4xl mb-1">
                                                 {moodEmojis[mood as keyof typeof moodEmojis]}
@@ -163,12 +140,13 @@ Prenez votre temps, cet espace est privé et sécurisé. 💭"
 
                         {/* Boutons d'action */}
                         <div className="flex gap-4">
-                            <a
-                                href="/journal"
+                            <button
+                                type="button"
+                                onClick={() => router.visit('/journal')}
                                 className="flex-1 px-6 py-4 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition-colors text-center"
                             >
                                 ← Annuler
-                            </a>
+                            </button>
                             <button
                                 type="submit"
                                 disabled={loading || !formData.content.trim()}
@@ -187,6 +165,6 @@ Prenez votre temps, cet espace est privé et sécurisé. 💭"
                     </form>
                 </div>
             </div>
-        </>
+        </AuthenticatedLayout>
     );
 }

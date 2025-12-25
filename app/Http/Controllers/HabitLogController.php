@@ -1,49 +1,43 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\HabitLog;
 use App\Models\Habit;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
 
 class HabitLogController extends Controller
 {
-    public function today(Request $request)
-    {
-        $habits = $request->user()->habits()->where('is_active', true)->get();
-        
-        $habitsWithLogs = $habits->map(function ($habit) use ($request) {
-            $log = HabitLog::where('habit_id', $habit->id)
-                ->where('user_id', $request->user()->id)
-                ->whereDate('date', Carbon::today())
-                ->first();
-
-            return [
-                'habit' => $habit,
-                'completed' => $log ? $log->completed : false,
-                'log_id' => $log ? $log->id : null
-            ];
-        });
-
-        return response()->json($habitsWithLogs);
-    }
-
     public function toggle(Request $request, Habit $habit)
     {
-       
+        // Ensure user owns this habit
+        if ($habit->user_id !== auth()->id()) {
+            abort(403);
+        }
 
-        $log = HabitLog::updateOrCreate(
-            [
+        $validated = $request->validate([
+            'completed' => 'required|boolean',
+        ]);
+
+        $today = today();
+
+        // Find or create today's log
+        $log = HabitLog::where('user_id', auth()->id())
+            ->where('habit_id', $habit->id)
+            ->whereDate('date', $today)
+            ->first();
+
+        if ($log) {
+            $log->update(['completed' => $validated['completed']]);
+        } else {
+            HabitLog::create([
+                'user_id' => auth()->id(),
                 'habit_id' => $habit->id,
-                'user_id' => $request->user()->id,
-                'date' => Carbon::today()
-            ],
-            [
-                'completed' => $request->boolean('completed')
-            ]
-        );
+                'completed' => $validated['completed'],
+                'date' => $today,
+            ]);
+        }
 
-        return response()->json($log);
+        return redirect()->back();
     }
 }

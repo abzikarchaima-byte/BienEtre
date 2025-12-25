@@ -1,17 +1,6 @@
-// resources/js/pages/journal/index.tsx
-import { Head } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-
-const api = axios.create({
-    baseURL: 'http://localhost:8000/api',
-    headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-    },
-    withCredentials: true,
-});
+import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
+import AuthenticatedLayout from '@/layouts/authenticated-layout';
 
 interface JournalEntry {
     id: number;
@@ -21,39 +10,32 @@ interface JournalEntry {
     created_at: string;
 }
 
+interface PaginationLink {
+    url: string | null;
+    label: string;
+    active: boolean;
+}
+
+interface JournalProps {
+    entries: {
+        data: JournalEntry[];
+        current_page: number;
+        last_page: number;
+        links: PaginationLink[];
+    };
+}
+
 const moodEmojis: Record<number, string> = {
-    1: '😢',
-    2: '😟',
-    3: '😐',
-    4: '😊',
-    5: '😄',
+    0: '😢',
+    1: '😟',
+    2: '😐',
+    3: '😊',
+    4: '😄',
 };
 
-export default function JournalIndex() {
-    const [entries, setEntries] = useState<JournalEntry[]>([]);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [lastPage, setLastPage] = useState(1);
+export default function JournalIndex({ entries }: JournalProps) {
     const [showModal, setShowModal] = useState(false);
     const [viewEntry, setViewEntry] = useState<JournalEntry | null>(null);
-    const [isInitialized, setIsInitialized] = useState(false);
-
-    useEffect(() => {
-        if (!isInitialized) {
-            loadEntries(1);
-            setIsInitialized(true);
-        }
-    }, [isInitialized]);
-
-    const loadEntries = async (page: number) => {
-        try {
-            const response = await api.get(`/journal?page=${page}`);
-            setEntries(response.data.data || []);
-            setCurrentPage(response.data.current_page || 1);
-            setLastPage(response.data.last_page || 1);
-        } catch (error) {
-            console.error('Erreur:', error);
-        }
-    };
 
     const openEntry = (entry: JournalEntry) => {
         setViewEntry(entry);
@@ -65,17 +47,13 @@ export default function JournalIndex() {
         setViewEntry(null);
     };
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = (id: number) => {
         if (!confirm('Êtes-vous sûr de vouloir supprimer cette entrée ?')) return;
 
-        try {
-            await api.delete(`/journal/${id}`);
-            closeModal();
-            await loadEntries(currentPage);
-        } catch (error) {
-            console.error('Erreur:', error);
-            alert('Erreur lors de la suppression');
-        }
+        router.delete(`/journal/${id}`, {
+            preserveScroll: true,
+            onSuccess: () => closeModal(),
+        });
     };
 
     const formatDate = (dateString: string) => {
@@ -102,12 +80,12 @@ export default function JournalIndex() {
     };
 
     return (
-        <>
+        <AuthenticatedLayout>
             <Head title="Mon Journal" />
 
             <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    
+
                     {/* Header */}
                     <div className="flex justify-between items-center mb-8">
                         <div>
@@ -118,16 +96,16 @@ export default function JournalIndex() {
                                 Exprimez vos pensées et suivez votre parcours
                             </p>
                         </div>
-                        <a
+                        <Link
                             href="/journal/create"
                             className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-lg"
                         >
                             ✍️ Nouvelle entrée
-                        </a>
+                        </Link>
                     </div>
 
                     {/* Liste des entrées */}
-                    {entries.length === 0 ? (
+                    {entries.data.length === 0 ? (
                         <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
                             <div className="text-6xl mb-4">📔</div>
                             <h3 className="text-2xl font-bold text-gray-800 mb-2">
@@ -136,16 +114,16 @@ export default function JournalIndex() {
                             <p className="text-gray-600 mb-6">
                                 Commencez à écrire vos pensées et émotions
                             </p>
-                            <a
+                            <Link
                                 href="/journal/create"
                                 className="inline-block bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all"
                             >
                                 Écrire ma première entrée
-                            </a>
+                            </Link>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {entries.map((entry) => (
+                            {entries.data.map((entry) => (
                                 <div
                                     key={entry.id}
                                     onClick={() => openEntry(entry)}
@@ -154,7 +132,7 @@ export default function JournalIndex() {
                                     <div className="flex items-start justify-between mb-3">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-3 mb-2">
-                                                {entry.mood_level && (
+                                                {entry.mood_level !== null && (
                                                     <span className="text-3xl">
                                                         {moodEmojis[entry.mood_level]}
                                                     </span>
@@ -172,9 +150,7 @@ export default function JournalIndex() {
                                                 {truncateText(entry.content, 200)}
                                             </p>
                                         </div>
-                                        <button
-                                            className="text-gray-400 hover:text-purple-600 transition-colors ml-4"
-                                        >
+                                        <button className="text-gray-400 hover:text-purple-600 transition-colors ml-4">
                                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                             </svg>
@@ -186,37 +162,29 @@ export default function JournalIndex() {
                     )}
 
                     {/* Pagination */}
-                    {lastPage > 1 && (
+                    {entries.last_page > 1 && (
                         <div className="flex justify-center gap-2 mt-8">
-                            <button
-                                onClick={() => loadEntries(currentPage - 1)}
-                                disabled={currentPage === 1}
-                                className="px-4 py-2 rounded-lg bg-white shadow hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                            >
-                                ← Précédent
-                            </button>
-                            <span className="px-4 py-2 bg-white rounded-lg shadow font-medium">
-                                Page {currentPage} / {lastPage}
-                            </span>
-                            <button
-                                onClick={() => loadEntries(currentPage + 1)}
-                                disabled={currentPage === lastPage}
-                                className="px-4 py-2 rounded-lg bg-white shadow hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                            >
-                                Suivant →
-                            </button>
+                            {entries.links.map((link, index) => (
+                                link.url ? (
+                                    <Link
+                                        key={index}
+                                        href={link.url}
+                                        className={`px-4 py-2 rounded-lg font-medium transition-all ${link.active
+                                                ? 'bg-purple-500 text-white'
+                                                : 'bg-white shadow hover:shadow-md'
+                                            }`}
+                                        dangerouslySetInnerHTML={{ __html: link.label }}
+                                    />
+                                ) : (
+                                    <span
+                                        key={index}
+                                        className="px-4 py-2 rounded-lg bg-gray-100 text-gray-400"
+                                        dangerouslySetInnerHTML={{ __html: link.label }}
+                                    />
+                                )
+                            ))}
                         </div>
                     )}
-
-                    {/* Bouton retour */}
-                    <div className="mt-8">
-                        <a
-                            href="/dashboard"
-                            className="inline-flex items-center text-purple-600 hover:text-purple-700 font-medium"
-                        >
-                            ← Retour au dashboard
-                        </a>
-                    </div>
                 </div>
             </div>
 
@@ -226,7 +194,7 @@ export default function JournalIndex() {
                     <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-8 my-8">
                         <div className="flex items-start justify-between mb-6">
                             <div className="flex items-center gap-3">
-                                {viewEntry.mood_level && (
+                                {viewEntry.mood_level !== null && (
                                     <span className="text-4xl">
                                         {moodEmojis[viewEntry.mood_level]}
                                     </span>
@@ -255,12 +223,6 @@ export default function JournalIndex() {
                         </div>
 
                         <div className="flex gap-3 pt-4 border-t">
-                            <a
-                                href={`/journal/${viewEntry.id}/edit`}
-                                className="flex-1 bg-blue-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-blue-600 transition-colors text-center"
-                            >
-                                ✏️ Modifier
-                            </a>
                             <button
                                 onClick={() => handleDelete(viewEntry.id)}
                                 className="flex-1 bg-red-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-red-600 transition-colors"
@@ -277,6 +239,6 @@ export default function JournalIndex() {
                     </div>
                 </div>
             )}
-        </>
+        </AuthenticatedLayout>
     );
 }

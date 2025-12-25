@@ -1,23 +1,17 @@
-// resources/js/pages/habits/index.tsx
 import { Head } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-
-const api = axios.create({
-    baseURL: 'http://localhost:8000/api',
-    headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-    },
-    withCredentials: true,
-});
+import { useState } from 'react';
+import { router } from '@inertiajs/react';
+import AuthenticatedLayout from '@/layouts/authenticated-layout';
 
 interface Habit {
     id: number;
     name: string;
     category: string;
     is_active: boolean;
+}
+
+interface HabitsProps {
+    habits: Habit[];
 }
 
 const categories = [
@@ -28,29 +22,11 @@ const categories = [
     { value: 'autre', label: 'Autre', emoji: '✨', color: 'bg-gray-100 text-gray-700' },
 ];
 
-export default function HabitsIndex() {
-    const [habits, setHabits] = useState<Habit[]>([]);
+export default function HabitsIndex({ habits }: HabitsProps) {
     const [showModal, setShowModal] = useState(false);
     const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
     const [formData, setFormData] = useState({ name: '', category: 'sommeil' });
     const [loading, setLoading] = useState(false);
-    const [isInitialized, setIsInitialized] = useState(false);
-
-    useEffect(() => {
-        if (!isInitialized) {
-            loadHabits();
-            setIsInitialized(true);
-        }
-    }, [isInitialized]);
-
-    const loadHabits = async () => {
-        try {
-            const response = await api.get('/habits');
-            setHabits(response.data);
-        } catch (error) {
-            console.error('Erreur:', error);
-        }
-    };
 
     const openCreateModal = () => {
         setEditingHabit(null);
@@ -70,38 +46,31 @@ export default function HabitsIndex() {
         setFormData({ name: '', category: 'sommeil' });
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
-        try {
-            if (editingHabit) {
-                // Modifier
-                await api.put(`/habits/${editingHabit.id}`, formData);
-            } else {
-                // Créer
-                await api.post('/habits', formData);
-            }
-            await loadHabits();
-            closeModal();
-        } catch (error) {
-            console.error('Erreur:', error);
-            alert('Erreur lors de l\'enregistrement');
-        } finally {
-            setLoading(false);
+        if (editingHabit) {
+            router.put(`/habits/${editingHabit.id}`, formData, {
+                preserveScroll: true,
+                onSuccess: () => closeModal(),
+                onFinish: () => setLoading(false),
+            });
+        } else {
+            router.post('/habits', formData, {
+                preserveScroll: true,
+                onSuccess: () => closeModal(),
+                onFinish: () => setLoading(false),
+            });
         }
     };
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = (id: number) => {
         if (!confirm('Êtes-vous sûr de vouloir supprimer cette habitude ?')) return;
 
-        try {
-            await api.delete(`/habits/${id}`);
-            await loadHabits();
-        } catch (error) {
-            console.error('Erreur:', error);
-            alert('Erreur lors de la suppression');
-        }
+        router.delete(`/habits/${id}`, {
+            preserveScroll: true,
+        });
     };
 
     const getCategoryInfo = (category: string) => {
@@ -109,12 +78,12 @@ export default function HabitsIndex() {
     };
 
     return (
-        <>
+        <AuthenticatedLayout>
             <Head title="Mes Habitudes" />
 
             <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50">
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    
+
                     {/* Header */}
                     <div className="flex justify-between items-center mb-8">
                         <div>
@@ -133,7 +102,7 @@ export default function HabitsIndex() {
                         </button>
                     </div>
 
-                    {/* Habitudes par défaut suggérées */}
+                    {/* Suggestions */}
                     {habits.length === 0 && (
                         <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6 mb-6">
                             <h3 className="text-lg font-semibold text-blue-800 mb-3">
@@ -215,16 +184,6 @@ export default function HabitsIndex() {
                             </button>
                         </div>
                     )}
-
-                    {/* Bouton retour */}
-                    <div className="mt-8">
-                        <a
-                            href="/dashboard"
-                            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                            ← Retour au dashboard
-                        </a>
-                    </div>
                 </div>
             </div>
 
@@ -264,11 +223,10 @@ export default function HabitsIndex() {
                                             key={cat.value}
                                             type="button"
                                             onClick={() => setFormData({ ...formData, category: cat.value })}
-                                            className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                                                formData.category === cat.value
+                                            className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${formData.category === cat.value
                                                     ? 'border-blue-500 bg-blue-50'
                                                     : 'border-gray-200 hover:border-gray-300'
-                                            }`}
+                                                }`}
                                         >
                                             <span className="text-2xl">{cat.emoji}</span>
                                             <span className="font-medium text-gray-700">{cat.label}</span>
@@ -298,6 +256,6 @@ export default function HabitsIndex() {
                     </div>
                 </div>
             )}
-        </>
+        </AuthenticatedLayout>
     );
 }
